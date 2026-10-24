@@ -1,0 +1,89 @@
+# FreeCAD Macro: Generate 50 simple educational component models and export STEP
+# Usage:
+# 1. Open FreeCAD.
+# 2. Select Macro > Macros... > Create, save this file as HPDC_50_STEP_Generator.FCMacro.
+# 3. Paste this code, save, and run the macro.
+# 4. Choose an output folder when prompted.
+#
+# NOTE: These are simplified parametric practice geometries, NOT verified production
+# parts or proof of HPDC manufacture. Use them for CAD/rendering workflow practice only.
+
+import FreeCAD as App
+import Part
+import math
+from FreeCAD import Vector
+from PySide import QtGui
+
+names = [
+    "Gearbox_Housing", "Oil_Filter_Housing", "Motor_Housing", "Engine_Mounting_Bracket",
+    "Oil_Pump_Housing", "Water_Pump_Housing", "Alternator_Housing", "EGR_Housing",
+    "ECU_Enclosure", "EV_Inverter_Housing", "Transmission_Cover", "Headlight_Housing",
+    "Throttle_Body_Housing", "Fuel_Pump_Housing", "Thermostat_Housing", "Turbo_Compressor_Housing",
+    "Turbo_Centre_Housing", "Intake_Manifold_Placeholder", "Cylinder_Head_Cover", "Bell_Housing",
+    "Differential_Housing", "Clutch_Housing", "Steering_Gear_Housing", "Brake_Master_Cylinder_Housing",
+    "ABS_Control_Unit_Housing", "AC_Compressor_Housing", "HVAC_Blower_Housing", "Battery_Enclosure",
+    "Battery_Cooling_Plate", "Sensor_Housing", "Power_Steering_Pump_Housing", "Injection_Pump_Housing",
+    "Coolant_Outlet_Housing", "Oil_Cooler_Housing", "Engine_Front_Cover", "Timing_Chain_Cover",
+    "Flywheel_Housing", "Wiper_Motor_Housing", "Door_Handle", "Side_Mirror_Bracket",
+    "Seat_Adjustment_Bracket", "Wheel_Hub", "Brake_Caliper_Placeholder", "Alloy_Wheel_Placeholder",
+    "Roof_Rack_Bracket", "Instrument_Panel_Bracket", "Connector_Housing", "LED_Heat_Sink",
+    "Transmission_Valve_Body", "Pump_Housing"
+]
+
+def make_part(idx, name):
+    # A deterministic family of simple solids with mounting holes, bosses, ribs or cavities.
+    doc = App.newDocument("PartDoc")
+    t = idx % 6
+    if t == 0:  # hollow rectangular enclosure
+        outer = Part.makeBox(90 + idx%4*5, 65 + idx%3*5, 28 + idx%5*3)
+        inner = Part.makeBox(outer.BoundBox.XLength-10, outer.BoundBox.YLength-10, outer.BoundBox.ZLength-8)
+        inner.translate(Vector(5,5,5))
+        shape = outer.cut(inner)
+        for x,y in [(10,10),(outer.BoundBox.XLength-10,10),(10,outer.BoundBox.YLength-10),(outer.BoundBox.XLength-10,outer.BoundBox.YLength-10)]:
+            shape = shape.cut(Part.makeCylinder(3.2, outer.BoundBox.ZLength+2, Vector(x,y,-1)))
+    elif t == 1:  # round flanged housing
+        shape = Part.makeCylinder(32 + idx%5*2, 32 + idx%4*3)
+        shape = shape.fuse(Part.makeCylinder(43 + idx%4*2, 7))
+        shape = shape.cut(Part.makeCylinder(16 + idx%4*2, 45, Vector(0,0,-1)))
+        for a in range(4):
+            ang = a*math.pi/2
+            shape = shape.cut(Part.makeCylinder(3.2, 9, Vector(35*math.cos(ang),35*math.sin(ang),-1)))
+    elif t == 2:  # bracket with two feet and upright web
+        a = Part.makeBox(85, 22, 8)
+        b = Part.makeBox(8, 22, 48, Vector(0,0,8))
+        c = Part.makeBox(8, 22, 48, Vector(77,0,8))
+        shape = a.fuse(b).fuse(c)
+        shape = shape.cut(Part.makeCylinder(4, 10, Vector(15,11,-1)))
+        shape = shape.cut(Part.makeCylinder(4, 10, Vector(70,11,-1)))
+    elif t == 3:  # circular cover with bolt pattern
+        shape = Part.makeCylinder(42 + idx%4*3, 8)
+        shape = shape.fuse(Part.makeCylinder(29 + idx%3*2, 16, Vector(0,0,8)))
+        shape = shape.cut(Part.makeCylinder(12 + idx%4, 26, Vector(0,0,-1)))
+        for a in range(6):
+            ang = a*math.pi/3
+            shape = shape.cut(Part.makeCylinder(3, 10, Vector(34*math.cos(ang),34*math.sin(ang),-1)))
+    elif t == 4:  # plate with cooling ribs
+        shape = Part.makeBox(95, 65, 8)
+        for x in range(8, 90, 12):
+            shape = shape.fuse(Part.makeBox(3, 55, 12, Vector(x,5,8)))
+        for x,y in [(8,8),(87,8),(8,57),(87,57)]:
+            shape = shape.cut(Part.makeCylinder(3, 10, Vector(x,y,-1)))
+    else:  # pipe-like manifold block with ports
+        shape = Part.makeBox(95, 38, 28)
+        for x in [15, 38, 61, 84]:
+            shape = shape.cut(Part.makeCylinder(7 + idx%3, 40, Vector(x,19,-5)))
+        shape = shape.fuse(Part.makeBox(25, 48, 8, Vector(35,-5,20)))
+    obj = doc.addObject("PartDesign::Feature", "Component")
+    obj.Label = name
+    obj.Shape = shape
+    doc.recompute()
+    return doc, obj
+
+folder = QtGui.QFileDialog.getExistingDirectory(None, "Choose folder for 50 STEP files")
+if folder:
+    for i, name in enumerate(names):
+        doc, obj = make_part(i, name)
+        path = folder + "/" + ("%02d_" % (i+1)) + name + ".step"
+        Part.export([obj], path)
+        App.closeDocument(doc.Name)
+    QtGui.QMessageBox.information(None, "Done", "Exported 50 simplified STEP practice models to:\n" + folder)
